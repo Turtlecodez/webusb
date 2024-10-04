@@ -23,14 +23,7 @@
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
-        input[type="file"] {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        select {
+        input[type="file"], select {
             width: 100%;
             padding: 10px;
             margin: 10px 0;
@@ -46,6 +39,7 @@
             border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
+            margin-top: 10px;
         }
         button:hover {
             background-color: #218838;
@@ -79,6 +73,7 @@
         <select id="deviceSelect"></select>
         <input type="file" id="firmwareFile" accept=".bin" />
         <button id="flashButton">Flash Firmware</button>
+        <button id="clearButton">Clear Data from USB</button>
         <div class="message" id="message"></div>
         <div class="progress-container" id="progressContainer">
             <div class="progress" id="progressBar"></div>
@@ -89,13 +84,27 @@
         const deviceSelect = document.getElementById('deviceSelect');
 
         async function populateDeviceList() {
-            const devices = await navigator.usb.getDevices();
-            devices.forEach(device => {
-                const option = document.createElement('option');
-                option.value = device.deviceId;
-                option.textContent = `${device.productName} - ${device.manufacturerName}`;
-                deviceSelect.appendChild(option);
-            });
+            deviceSelect.innerHTML = ''; // Clear previous options
+            try {
+                const devices = await navigator.usb.getDevices();
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.textContent = `${device.productName} - ${device.manufacturerName}`;
+                    deviceSelect.appendChild(option);
+                });
+
+                // If no devices are listed, request for a new device
+                if (devices.length === 0) {
+                    const device = await navigator.usb.requestDevice({ filters: [] });
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.textContent = `${device.productName} - ${device.manufacturerName}`;
+                    deviceSelect.appendChild(option);
+                }
+            } catch (error) {
+                console.error('Error accessing USB devices:', error);
+            }
         }
 
         document.getElementById('flashButton').addEventListener('click', async () => {
@@ -141,6 +150,32 @@
             } catch (error) {
                 console.error(error);
                 messageDiv.textContent = 'Error flashing firmware: ' + error.message;
+                messageDiv.className = 'message error';
+            } finally {
+                await device.close();
+            }
+        });
+
+        document.getElementById('clearButton').addEventListener('click', async () => {
+            const messageDiv = document.getElementById('message');
+            const selectedDeviceId = deviceSelect.value;
+            const device = await navigator.usb.getDevice(selectedDeviceId);
+            await device.open();
+
+            try {
+                const clearData = new Uint8Array(64); // Adjust size as needed
+                const totalChunks = 100; // Define how many chunks to write
+                const chunkSize = clearData.length;
+                
+                for (let i = 0; i < totalChunks; i++) {
+                    await device.transferOut(1, clearData);
+                }
+
+                messageDiv.textContent = 'USB data cleared successfully!';
+                messageDiv.className = 'message';
+            } catch (error) {
+                console.error(error);
+                messageDiv.textContent = 'Error clearing USB data: ' + error.message;
                 messageDiv.className = 'message error';
             } finally {
                 await device.close();
