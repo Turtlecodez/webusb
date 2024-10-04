@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>USB Flasher</title>
+    <title>USB Flasher for Chrome OS Factory Shim</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -72,8 +72,8 @@
         <h1>USB Flasher</h1>
         <select id="deviceSelect"></select>
         <input type="file" id="firmwareFile" accept=".bin" />
-        <button id="flashButton">Flash Firmware</button>
-        <button id="clearButton">Clear Data from USB</button>
+        <button id="flashButton">Flash Chrome OS Factory Shim</button>
+        <button id="clearButton">Clear Chrome OS Factory Shim from USB</button>
         <div class="message" id="message"></div>
         <div class="progress-container" id="progressContainer">
             <div class="progress" id="progressBar"></div>
@@ -96,14 +96,22 @@
 
                 // If no devices are listed, request for a new device
                 if (devices.length === 0) {
-                    const device = await navigator.usb.requestDevice({ filters: [] });
-                    const option = document.createElement('option');
-                    option.value = device.deviceId;
-                    option.textContent = `${device.productName} - ${device.manufacturerName}`;
-                    deviceSelect.appendChild(option);
+                    await requestUSBDevice();
                 }
             } catch (error) {
                 console.error('Error accessing USB devices:', error);
+            }
+        }
+
+        async function requestUSBDevice() {
+            try {
+                const device = await navigator.usb.requestDevice({ filters: [] });
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.textContent = `${device.productName} - ${device.manufacturerName}`;
+                deviceSelect.appendChild(option);
+            } catch (error) {
+                console.error('User did not select a device:', error);
             }
         }
 
@@ -118,7 +126,7 @@
             progressContainer.style.display = 'none'; // Hide progress bar
 
             if (!file) {
-                messageDiv.textContent = 'Please select a firmware file.';
+                messageDiv.textContent = 'Please select a Chrome OS factory shim (.bin) file.';
                 messageDiv.className = 'message error';
                 return;
             }
@@ -145,7 +153,7 @@
                     progressBar.style.width = progressPercentage + '%';
                 }
 
-                messageDiv.textContent = 'Firmware flashed successfully!';
+                messageDiv.textContent = 'Chrome OS factory shim flashed successfully!';
                 messageDiv.className = 'message';
             } catch (error) {
                 console.error(error);
@@ -163,15 +171,15 @@
             await device.open();
 
             try {
-                const clearData = new Uint8Array(64); // Adjust size as needed
-                const totalChunks = 100; // Define how many chunks to write
+                const clearData = new Uint8Array(64); // Clear data as zeroed blocks
+                const totalChunks = 100; // Define how many chunks to write, adjust based on the device
                 const chunkSize = clearData.length;
-                
+
                 for (let i = 0; i < totalChunks; i++) {
                     await device.transferOut(1, clearData);
                 }
 
-                messageDiv.textContent = 'USB data cleared successfully!';
+                messageDiv.textContent = 'Chrome OS factory shim cleared successfully!';
                 messageDiv.className = 'message';
             } catch (error) {
                 console.error(error);
@@ -183,7 +191,9 @@
         });
 
         // Populate the device list on page load
-        populateDeviceList();
+        window.onload = async () => {
+            await populateDeviceList();
+        };
     </script>
 </body>
 </html>
