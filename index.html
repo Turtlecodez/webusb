@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USB Flasher</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .container {
+            max-width: 400px;
+            margin: auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .message {
+            margin-top: 10px;
+            text-align: center;
+            color: #28a745;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .progress-container {
+            width: 100%;
+            background-color: #ddd;
+            border-radius: 4px;
+            margin-top: 10px;
+            display: none; /* Hidden by default */
+        }
+        .progress {
+            height: 20px;
+            width: 0;
+            background-color: #28a745;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>USB Flasher</h1>
+        <input type="file" id="firmwareFile" accept=".bin" />
+        <button id="flashButton">Flash Firmware</button>
+        <div class="message" id="message"></div>
+        <div class="progress-container" id="progressContainer">
+            <div class="progress" id="progressBar"></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('flashButton').addEventListener('click', async () => {
+            const fileInput = document.getElementById('firmwareFile');
+            const messageDiv = document.getElementById('message');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const file = fileInput.files[0];
+
+            messageDiv.textContent = ''; // Clear previous messages
+            progressContainer.style.display = 'none'; // Hide progress bar
+
+            if (!file) {
+                messageDiv.textContent = 'Please select a firmware file.';
+                messageDiv.className = 'message error';
+                return;
+            }
+
+            try {
+                const device = await navigator.usb.requestDevice({ filters: [] });
+                await device.open();
+                
+                const firmwareData = await file.arrayBuffer();
+                const totalLength = firmwareData.byteLength;
+                const chunkSize = 64; // Define the chunk size for transfer
+                let bytesTransferred = 0;
+
+                progressContainer.style.display = 'block'; // Show progress bar
+
+                while (bytesTransferred < totalLength) {
+                    const end = Math.min(bytesTransferred + chunkSize, totalLength);
+                    const chunk = firmwareData.slice(bytesTransferred, end);
+                    await device.transferOut(1, chunk);
+
+                    bytesTransferred += chunk.byteLength;
+                    const progressPercentage = (bytesTransferred / totalLength) * 100;
+                    progressBar.style.width = progressPercentage + '%';
+                }
+
+                messageDiv.textContent = 'Firmware flashed successfully!'
+                messageDiv.className = 'message';
+                await device.close();
+            } catch (error) {
+                console.error(error);
+                messageDiv.textContent = 'Error flashing firmware: ' + error.message;
+                messageDiv.className = 'message error';
+            }
+        });
+    </script>
+</body>
+</html>
