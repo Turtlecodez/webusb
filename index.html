@@ -3,197 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>USB Flasher for Chrome OS Factory Shim</title>
+    <title>USB Recovery Utility</title>
     <style>
         body {
             font-family: Arial, sans-serif;
+            margin: 20px;
             background-color: #f4f4f4;
-            margin: 0;
-            padding: 20px;
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-        }
-        .container {
-            max-width: 400px;
-            margin: auto;
-            padding: 20px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        input[type="file"], select {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 4px;
         }
         button {
-            width: 100%;
-            padding: 10px;
-            background-color: #28a745;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
+            padding: 10px 20px;
             font-size: 16px;
-            margin-top: 10px;
         }
-        button:hover {
-            background-color: #218838;
-        }
-        .message {
-            margin-top: 10px;
-            text-align: center;
-            color: #28a745;
-        }
-        .error {
-            color: #dc3545;
-        }
-        .progress-container {
-            width: 100%;
-            background-color: #ddd;
-            border-radius: 4px;
-            margin-top: 10px;
-            display: none; /* Hidden by default */
-        }
-        .progress {
-            height: 20px;
-            width: 0;
-            background-color: #28a745;
-            border-radius: 4px;
+        #status {
+            margin-top: 20px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>USB Flasher</h1>
-        <select id="deviceSelect"></select>
-        <input type="file" id="firmwareFile" accept=".bin" />
-        <button id="flashButton">Flash Chrome OS Factory Shim</button>
-        <button id="clearButton">Clear Chrome OS Factory Shim from USB</button>
-        <div class="message" id="message"></div>
-        <div class="progress-container" id="progressContainer">
-            <div class="progress" id="progressBar"></div>
-        </div>
-    </div>
 
-    <script>
-        const deviceSelect = document.getElementById('deviceSelect');
+<h1>USB Recovery Utility</h1>
+<button id="connect">Connect to USB</button>
+<div id="status"></div>
 
-        async function populateDeviceList() {
-            deviceSelect.innerHTML = ''; // Clear previous options
-            try {
-                const devices = await navigator.usb.getDevices();
-                devices.forEach(device => {
-                    const option = document.createElement('option');
-                    option.value = device.deviceId;
-                    option.textContent = `${device.productName} - ${device.manufacturerName}`;
-                    deviceSelect.appendChild(option);
-                });
-
-                // If no devices are listed, request for a new device
-                if (devices.length === 0) {
-                    await requestUSBDevice();
-                }
-            } catch (error) {
-                console.error('Error accessing USB devices:', error);
-            }
+<script>
+    document.getElementById('connect').addEventListener('click', async () => {
+        const statusDiv = document.getElementById('status');
+        try {
+            const device = await navigator.usb.requestDevice({ filters: [] });
+            statusDiv.innerText = `Connected to: ${device.productName}`;
+            // You can add more functionality here for recovery tasks
+        } catch (error) {
+            statusDiv.innerText = `Error: ${error.message}`;
         }
+    });
+</script>
 
-        async function requestUSBDevice() {
-            try {
-                const device = await navigator.usb.requestDevice({ filters: [] });
-                const option = document.createElement('option');
-                option.value = device.deviceId;
-                option.textContent = `${device.productName} - ${device.manufacturerName}`;
-                deviceSelect.appendChild(option);
-            } catch (error) {
-                console.error('User did not select a device:', error);
-            }
-        }
-
-        document.getElementById('flashButton').addEventListener('click', async () => {
-            const fileInput = document.getElementById('firmwareFile');
-            const messageDiv = document.getElementById('message');
-            const progressContainer = document.getElementById('progressContainer');
-            const progressBar = document.getElementById('progressBar');
-            const file = fileInput.files[0];
-
-            messageDiv.textContent = ''; // Clear previous messages
-            progressContainer.style.display = 'none'; // Hide progress bar
-
-            if (!file) {
-                messageDiv.textContent = 'Please select a Chrome OS factory shim (.bin) file.';
-                messageDiv.className = 'message error';
-                return;
-            }
-
-            const selectedDeviceId = deviceSelect.value;
-            const device = await navigator.usb.getDevice(selectedDeviceId);
-            await device.open();
-
-            try {
-                const firmwareData = await file.arrayBuffer();
-                const totalLength = firmwareData.byteLength;
-                const chunkSize = 64; // Define the chunk size for transfer
-                let bytesTransferred = 0;
-
-                progressContainer.style.display = 'block'; // Show progress bar
-
-                while (bytesTransferred < totalLength) {
-                    const end = Math.min(bytesTransferred + chunkSize, totalLength);
-                    const chunk = firmwareData.slice(bytesTransferred, end);
-                    await device.transferOut(1, chunk);
-
-                    bytesTransferred += chunk.byteLength;
-                    const progressPercentage = (bytesTransferred / totalLength) * 100;
-                    progressBar.style.width = progressPercentage + '%';
-                }
-
-                messageDiv.textContent = 'Chrome OS factory shim flashed successfully!';
-                messageDiv.className = 'message';
-            } catch (error) {
-                console.error(error);
-                messageDiv.textContent = 'Error flashing firmware: ' + error.message;
-                messageDiv.className = 'message error';
-            } finally {
-                await device.close();
-            }
-        });
-
-        document.getElementById('clearButton').addEventListener('click', async () => {
-            const messageDiv = document.getElementById('message');
-            const selectedDeviceId = deviceSelect.value;
-            const device = await navigator.usb.getDevice(selectedDeviceId);
-            await device.open();
-
-            try {
-                const clearData = new Uint8Array(64); // Clear data as zeroed blocks
-                const totalChunks = 100; // Define how many chunks to write, adjust based on the device
-                const chunkSize = clearData.length;
-
-                for (let i = 0; i < totalChunks; i++) {
-                    await device.transferOut(1, clearData);
-                }
-
-                messageDiv.textContent = 'Chrome OS factory shim cleared successfully!';
-                messageDiv.className = 'message';
-            } catch (error) {
-                console.error(error);
-                messageDiv.textContent = 'Error clearing USB data: ' + error.message;
-                messageDiv.className = 'message error';
-            } finally {
-                await device.close();
-            }
-        });
-
-        // Populate the device list on page load
-        window.onload = async () => {
-            await populateDeviceList();
-        };
-    </script>
 </body>
 </html>
